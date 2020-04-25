@@ -1,0 +1,20 @@
+
+main_sch_file = '1-Schematic_MyProject.json'
+main_pcb_file = '1-PCB_MyProject.json'
+
+out_sch_file = 'output_sch.json'
+out_pcb_file = 'output_pcb.json'
+
+channel_sources = [
+	(
+		'1-Schematic_MyChannel.json',		# sch file
+		'1-PCB_MyChannel.json',				# pcb file
+		# ch_name	offset_x		offset_y
+		{
+			'IN1': 	(0 / 0.254,		50 / 0.254),
+			'IN2':	(75 / 0.254,	50 / 0.254),
+		}
+	),
+	# you can add more channel sources here.
+	# just copy-paste the whole tuple above
+]
