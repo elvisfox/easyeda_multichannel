@@ -25,6 +25,19 @@ Script will update all of the channel prefixes, net names, etc, by adding an und
 For example, a part named **U1** will become **U1_CH1**, **U1_CH2** in the output design. Only power/ground ports remain
 unmodified.
 
+# Example
+Consider following schematic of the channel and a respective PCB:
+
+![Channel schematic](example/images/1-Schematic_example_channel.png) ![Channel PCB](example/images/1-PCB_example_channel.png)
+
+The following schematic will be used as a main source. Note the suffixes **_CH1**, **_CH2** that will be added by the script to the output of each channel.
+
+![Main schematic](example/images/1-Schematic_example_main.png) ![Main PCB](example/images/1-PCB_Main.png)
+
+Running the script with the default provided config.py.template will give the following output. The resulting schematic has 3 sheets (Main + 2x channel). Power ports remain global, thus **GND** is connected together.
+
+![Output schematic](example/images/output_sch.png) ![Output PCB](example/images/output_pcb.png)
+
 # Known Issues
 - Some dummy warnings are produced (to be improved in future)
 - PCB text labels remain unupdated until modified by user
