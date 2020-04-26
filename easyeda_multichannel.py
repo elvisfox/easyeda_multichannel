@@ -77,6 +77,18 @@ def offset_x_y(s, x, y, separator=' '):
 
 	return separator.join(data)
 
+def find_sub(subs, values):
+	for sub in subs:
+		for key, val in values.items():
+			if sub[0][key] != val:
+				break
+		else:
+			# OK, match
+			return sub
+
+	# Did not found
+	return None
+
 ####################################################
 ####				MAIN ROUTINE				####
 ####################################################
@@ -129,20 +141,25 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 
 			# Process parts
 			if shape_type == 'LIB':
+				# Find prefix sub
+				prefix_sub = find_sub(subs, {0: 'T', 1: 'P'})
+
 				# Ensure sub 2 is a prefix text
-				if subs[2][0][0] != 'T' or subs[2][0][1] != 'P':
+				if prefix_sub is None:
 					print('ERROR: Prefix text of SCH LIB shape is not recognized')
 					print(shape_to_str(i, subs))
+					continue
 
-				# Get old prefix
-				prefix_old = subs[2][0][12]
+				# Get old prefix and unique identifier
+				prefix_old = prefix_sub[0][12]
+				old_id = subs[0][0][6]
 
-				if prefix_old != 'NO':
+				# Update part, excluding sheet frame
+				if not old_id.startswith('frame_lib'):
 					# Append channel to the prefix
 					prefix_new = prefix_old + '_' + str(i_ch)
 
 					# Replace unique identifier, store reference in the dictionary
-					old_id = subs[0][0][6]
 					new_id = 'gge' + uuid.uuid4().hex[-16:]
 					part_dict[old_id] = new_id
 					subs[0][0][6] = new_id
@@ -156,7 +173,7 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 							net_dict[pad_net_old] = pad_net_new
 
 					# Store new prefix
-					subs[2][0][12] = prefix_new
+					prefix_sub[0][12] = prefix_new
 
 			# Process net labels
 			elif shape_type == 'N':
@@ -212,10 +229,16 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 			shape_type = subs[0][0][0]
 
 			if shape_type == 'LIB':
+				# Find prefix sub
+				prefix_sub = find_sub(subs, {0: 'TEXT', 1: 'P'})
+
 				# Ensure sub 2 is a prefix text
-				if subs[2][0][0] != 'TEXT' or subs[2][0][1] != 'P':
+				if prefix_sub is None:
 					print('ERROR: Prefix text of PCB LIB shape is not recognized')
 					print(shape_to_str(i, subs))
+				else:
+					# Append channel to the prefix
+					prefix_sub[0][10] += '_' + str(i_ch)
 
 				# Replace unique identifier
 				old_id = subs[0][0][6]
@@ -224,9 +247,6 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 					del part_dict[old_id]
 				else:
 					print('WARNING: PCB component %s is not matched with any schematic component' % subs[2][0][12])
-
-				# Append channel to the prefix
-				subs[2][0][10] += '_' + str(i_ch)
 
 			# Process coordinates and nets of all subshapes equally
 			for sub in subs:
