@@ -89,6 +89,20 @@ def find_sub(subs, values):
 	# Did not found
 	return None
 
+def translate_channel_prefix(oldPrefix, ch_id):
+	if oldPrefix.startswith('G:'):
+		# Treat names that start with G: as global nets. Here we don't add a channel
+		# name, but remove the G: prefix so it ties in with the global net in the main
+		# pcb or schematic. This is useful for address busses, databusses. clock lines,
+		# etc.. -TVe
+		return oldPrefix[2:]
+	elif config.channel_prefix_style == 1:
+		return oldPrefix + '_' + ch_id
+	elif config.channel_prefix_style == 2:
+		return ch_id + ':' + oldPrefix
+	else:
+		raise Exception('Unknown channel prefix style, please check configuration: ' + config.channel_prefix_style)
+
 ####################################################
 ####				MAIN ROUTINE				####
 ####################################################
@@ -127,7 +141,12 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 		sch['dataStr']['head']['uuid'] = uuid.uuid4().hex
 
 		# Append channel name to the sheet title
-		sch['title'] += '_' + str(i_ch)
+		if config.channel_prefix_style == 1:
+			sch['title'] += '_' + str(i_ch)
+		elif config.channel_prefix_style == 2:
+			sch['title'] = str(i_ch) + ':' + sch['title']
+		else:
+			raise Exception('Unknown channel prefix style, please check configuration: ' + config.channel_prefix_style)
 
 		# Process shapes
 		shape_list = sch['dataStr']['shape']
@@ -157,7 +176,7 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 				# Update part, excluding sheet frame
 				if not old_id.startswith('frame_lib'):
 					# Append channel to the prefix
-					prefix_new = prefix_old + '_' + str(i_ch)
+					prefix_new = translate_channel_prefix(prefix_old, str(i_ch))
 
 					# Replace unique identifier, store reference in the dictionary
 					new_id = 'gge' + uuid.uuid4().hex[-16:]
@@ -179,7 +198,7 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 			elif shape_type == 'N':
 				# Get old net name, append channel to the new name
 				net_name_old = subs[0][0][5]
-				net_name_new = net_name_old + '_' + str(i_ch)
+				net_name_new = translate_channel_prefix(net_name_old, str(i_ch))
 
 				# Store net
 				net_dict[net_name_old] = net_name_new
@@ -191,7 +210,7 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 			elif shape_type == 'F' and subs[0][0][1] == 'part_netLabel_netPort':
 				# Get old net name, append channel to the new name
 				net_name_old = subs[0][2][0]
-				net_name_new = net_name_old + '_' + str(i_ch)
+				net_name_new = translate_channel_prefix(net_name_old, str(i_ch))
 
 				# Store net
 				net_dict[net_name_old] = net_name_new
@@ -238,7 +257,10 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 					print(shape_to_str(i, subs))
 				else:
 					# Append channel to the prefix
-					prefix_sub[0][10] += '_' + str(i_ch)
+					prefix_sub[0][10] = translate_channel_prefix(prefix_sub[0][10], str(i_ch))
+					# Field 11 is assumed to be line data that draws the text.
+					# Remove it to force EasyEDA to recreate it. -TVe
+					prefix_sub[0][11] = ''
 
 				# Replace unique identifier
 				old_id = subs[0][0][6]
