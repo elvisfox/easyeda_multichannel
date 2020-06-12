@@ -130,6 +130,8 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 		####			PROCESSING SCHEMATIC			####
 		####################################################
 
+		print('Processing channel %s' % i_ch)
+
 		# Create deepcopy of channel schematic sheet
 		sch = copy.deepcopy(ch_sch['schematics'][0])
 
@@ -268,7 +270,8 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 					subs[0][0][6] = part_dict[old_id]
 					del part_dict[old_id]
 				else:
-					print('WARNING: PCB component %s is not matched with any schematic component' % subs[2][0][12])
+					print('WARNING: PCB component %s (id: %s) is not matched with any schematic component' % \
+						(prefix_sub[0][10], old_id))
 
 			# Process coordinates and nets of all subshapes equally
 			for sub in subs:
