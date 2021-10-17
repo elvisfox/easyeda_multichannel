@@ -1,6 +1,7 @@
 import json
 import copy
 import uuid
+import re
 
 import config
 
@@ -89,19 +90,66 @@ def find_sub(subs, values):
 	# Did not found
 	return None
 
-def translate_channel_prefix(oldPrefix, ch_id):
+def split_prefix(prefix):
+	"""
+	Split prefix into 3 strings: base, part, subpart
+	For example 'U1.3' will return 'U', '1', '.3'
+	The whole prefix is returned in 'base' if split fails.
+	-------
+	Arguments:
+		prefix:					str
+			Component prefix string
+	Return value:
+		(base: str, part: str, subpart: str)
+	"""
+	# Separate part and subpart index
+	try:
+		base, part, subpart = re.match('([A-Za-z]+)([0-9]+)(.[0-9]*)?', prefix).groups()
+
+		if subpart is None:
+			subpart = ''
+
+		return base, part, subpart
+		# print('INFO: Type: %s, part: %s, subpart: %s' % (type, part, subpart))
+	except Exception as inst:
+		print('WARNING: Unable to split prefix %s:' % prefix, inst)
+
+		# Fallback variant
+		return prefix, '', ''
+
+def translate_channel_net(oldPrefix, ch_id):
 	if oldPrefix.startswith('G:'):
 		# Treat names that start with G: as global nets. Here we don't add a channel
 		# name, but remove the G: prefix so it ties in with the global net in the main
 		# pcb or schematic. This is useful for address busses, databusses. clock lines,
 		# etc.. -TVe
 		return oldPrefix[2:]
-	elif config.channel_prefix_style == 1:
+	elif config.channel_net_style == 1:
 		return oldPrefix + '_' + ch_id
-	elif config.channel_prefix_style == 2:
+	elif config.channel_net_style == 2:
 		return ch_id + ':' + oldPrefix
 	else:
-		raise Exception('Unknown channel prefix style, please check configuration: ' + config.channel_prefix_style)
+		raise Exception('Unknown channel prefix style, please check configuration: ' + config.channel_net_style)
+
+def translate_channel_prefix(base, part, ch_id, incr_prefix):
+	"""
+	Convert component prefix to a channel-specific one
+	-------
+	Arguments:
+		base, part:
+			values returned by split_prefix()
+		ch_id:							str
+			String containing channel name
+		incr_prefix:					int
+			Integer number to increment the prefix by
+	Return value:
+		new_prefix:						str
+	"""
+
+	if config.channel_prefix_incr and len(part) > 0:
+		return '%s%d' % (base, int(part) + incr_prefix)
+	else:
+		return translate_channel_net('%s%s' % (base, part), ch_id)
 
 ####################################################
 ####				MAIN ROUTINE				####
@@ -110,6 +158,9 @@ def translate_channel_prefix(oldPrefix, ch_id):
 # Load schematics and PCBs
 main_sch = load_json_from_file(config.main_sch_file)
 main_pcb = load_json_from_file(config.main_pcb_file)
+
+# Global states
+svgnode_warn = True
 
 for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 	# Load channel schematics and PCBs
@@ -125,7 +176,7 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 	# dump_shapes(ch_sch['schematics'][0]['dataStr']['shape'], 'sch_shapes.txt')
 	# dump_shapes(ch_pcb['shape'], 'pcb_shapes.txt')
 
-	for i_ch, (ch_x, ch_y) in channels.items():
+	for i_ch, (ch_x, ch_y, incr_prefix) in channels.items():
 		####################################################
 		####			PROCESSING SCHEMATIC			####
 		####################################################
@@ -143,12 +194,12 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 		sch['dataStr']['head']['uuid'] = uuid.uuid4().hex
 
 		# Append channel name to the sheet title
-		if config.channel_prefix_style == 1:
+		if config.channel_net_style == 1:
 			sch['title'] += '_' + str(i_ch)
-		elif config.channel_prefix_style == 2:
+		elif config.channel_net_style == 2:
 			sch['title'] = str(i_ch) + ':' + sch['title']
 		else:
-			raise Exception('Unknown channel prefix style, please check configuration: ' + config.channel_prefix_style)
+			raise Exception('Unknown channel prefix style, please check configuration: ' + config.channel_net_style)
 
 		# Process shapes
 		shape_list = sch['dataStr']['shape']
@@ -177,8 +228,11 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 
 				# Update part, excluding sheet frame
 				if not old_id.startswith('frame_lib'):
+					# Split prefix
+					base, part, subpart = split_prefix(prefix_old)
+
 					# Append channel to the prefix
-					prefix_new = translate_channel_prefix(prefix_old, str(i_ch))
+					prefix_new = translate_channel_prefix(base, part, str(i_ch), incr_prefix)
 
 					# Replace unique identifier, store reference in the dictionary
 					new_id = 'gge' + uuid.uuid4().hex[-16:]
@@ -189,21 +243,21 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 					for sub in subs:
 						if sub[0][0] == 'P':
 							pad_name = sub[4][4]
-							pad_net_old = '%s_%s' % (prefix_old, pad_name)
+							pad_net_old = '%s%s_%s' % (base, part, pad_name)
 							pad_net_new = '%s_%s' % (prefix_new, pad_name)
-							net_dict[pad_net_old] = pad_net_new
+							net_dict[pad_net_old.upper()] = pad_net_new.upper()
 
 					# Store new prefix
-					prefix_sub[0][12] = prefix_new
+					prefix_sub[0][12] = '%s%s' % (prefix_new, subpart)
 
 			# Process net labels
 			elif shape_type == 'N':
 				# Get old net name, append channel to the new name
 				net_name_old = subs[0][0][5]
-				net_name_new = translate_channel_prefix(net_name_old, str(i_ch))
+				net_name_new = translate_channel_net(net_name_old, str(i_ch))
 
 				# Store net
-				net_dict[net_name_old] = net_name_new
+				net_dict[net_name_old.upper()] = net_name_new.upper()
 
 				# Store new net name
 				subs[0][0][5] = net_name_new
@@ -212,10 +266,10 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 			elif shape_type == 'F' and subs[0][0][1] == 'part_netLabel_netPort':
 				# Get old net name, append channel to the new name
 				net_name_old = subs[0][2][0]
-				net_name_new = translate_channel_prefix(net_name_old, str(i_ch))
+				net_name_new = translate_channel_net(net_name_old, str(i_ch))
 
 				# Store net
-				net_dict[net_name_old] = net_name_new
+				net_dict[net_name_old.upper()] = net_name_new.upper()
 
 				# Store new net name
 				subs[0][2][0] = net_name_new
@@ -223,7 +277,7 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 			# All power and ground netlabels are treated as global nets
 			elif shape_type == 'F':
 				net_name = subs[0][2][0]
-				net_dict[net_name] = net_name
+				net_dict[net_name.upper()] = net_name.upper()
 
 			# Reassemble shape
 			shape_list[i] = encode_shape(subs)
@@ -258,8 +312,16 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 					print('ERROR: Prefix text of PCB LIB shape is not recognized')
 					print(shape_to_str(i, subs))
 				else:
+					# Split prefix
+					base, part, subpart = split_prefix(prefix_sub[0][10])
+
+					# Ensure there is no subpart in PCB
+					if len(subpart) > 0:
+						print('ERROR: Subpart cannot exist in PCB: %s' % prefix_sub[0][10])
+
 					# Append channel to the prefix
-					prefix_sub[0][10] = translate_channel_prefix(prefix_sub[0][10], str(i_ch))
+					prefix_sub[0][10] = translate_channel_prefix(base, part, str(i_ch), incr_prefix)
+
 					# Field 11 is assumed to be line data that draws the text.
 					# Remove it to force EasyEDA to recreate it. -TVe
 					prefix_sub[0][11] = ''
@@ -292,7 +354,7 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 					data[4] = offset_x_y(data[4], ch_x, ch_y)
 
 					# update net data[3]
-					net_name = data[3]
+					net_name = data[3].upper()
 					if net_name:
 						try:
 							data[3] = net_dict[net_name]
@@ -316,7 +378,7 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 					data[2] = str(float(data[2]) + ch_y)
 
 					# update net data[4]
-					net_name = data[4]
+					net_name = data[4].upper()
 					if net_name:
 						try:
 							data[4] = net_dict[net_name]
@@ -331,7 +393,7 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 					data[19] = offset_x_y(data[19], ch_x, ch_y, separator=',')
 
 					# update net data[7]
-					net_name = data[7]
+					net_name = data[7].upper()
 					if net_name:
 						try:
 							data[7] = net_dict[net_name]
@@ -344,7 +406,9 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 
 				elif shape_type == 'SVGNODE':
 					# svg_data = json.loads(data[1])
-					print("NOTE: PCB shape SVGNODE has been skipped (not implemented yet)")
+					if svgnode_warn:
+						print("NOTE: PCB shape SVGNODE has been skipped (further occurrences will be suppressed)")
+					svgnode_warn = False
 
 				else:
 					print('ERROR: Unsupported pcb subshape %s' % shape_type)

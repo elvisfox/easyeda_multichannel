@@ -5,18 +5,24 @@ main_pcb_file = 'example/1-PCB_Main.json'
 out_sch_file = 'example/output_sch.json'
 out_pcb_file = 'example/output_pcb.json'
 
+# channel_net_style
 # Use 1 for default suffix with underscore and channel name (e.g. R1_CH1)
 # Use 2 to append channel name in front with a colon (e.g. CH1:R1)
-channel_prefix_style = 1
+channel_net_style = 1
+
+# channel_prefix_incr
+#	False: channel_net_style will be applied to components as well
+#	True: components index will increase by the value 'incr_prefix' specified for each channel
+channel_prefix_incr = True
 
 channel_sources = [
 	(
 		'example/1-Schematic_example_channel.json',		# sch file
 		'example/1-PCB_example_channel.json',			# pcb file
-		# ch_name	offset_x		offset_y
+		# ch_name	offset_x		offset_y		incr_prefix
 		{
-			'CH1': 	(0 / 0.254,		-20 / 0.254),
-			'CH2':	(0 / 0.254,		0 / 0.254),
+			'CH1': 	(0 / 0.254,		-20 / 0.254,	100),
+			'CH2':	(0 / 0.254,		0 / 0.254,		200),
 		}
 	),
 	# you can add more channel sources here.
