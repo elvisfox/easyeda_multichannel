@@ -155,8 +155,14 @@ def translate_channel_prefix(base, part, ch_id, incr_prefix):
 ####				MAIN ROUTINE				####
 ####################################################
 
-# Load schematics and PCBs
-main_sch = load_json_from_file(config.main_sch_file)
+# Load main schematics (if specified) or create empty
+if config.main_sch_file is None:
+	main_sch = dict()
+	main_sch['schematics'] = list()
+else:
+	main_sch = load_json_from_file(config.main_sch_file)
+
+# Load main PCB
 main_pcb = load_json_from_file(config.main_pcb_file)
 
 # Global states

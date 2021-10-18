@@ -19,7 +19,7 @@ Script will update all of the channel nets according to the configured **channel
 For example, a net named **INPUT** will become **INPUT_CH1**, **INPUT_CH2** in the output design. Power/ground ports remain
 unmodified. Also channel nets which names start with **G:** are treated as global, while the **G:** prefix itself it being removed in the output *(special thanks to @timveldhuizen for this feature)*.
 
-The component prefixes can be configured to increment by a specified number (e.g. **U1** becomes **U101**, **U102**) or processed in the same way as the nets (**U1_CH1**, **U1_CH2**).
+The component prefixes can be configured to increment by a specified number (e.g. **U1** becomes **U101**, **U201**) or processed in the same way as the nets (**U1_CH1**, **U1_CH2**).
 Behavior depends on the **channel_prefix_incr** setting in the config file (either True or False).
 
 3. Open the generated output schematic and PCB with EasyEDA. Preferrably save as a new project.
