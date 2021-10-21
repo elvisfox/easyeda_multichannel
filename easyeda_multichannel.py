@@ -165,9 +165,6 @@ else:
 # Load main PCB
 main_pcb = load_json_from_file(config.main_pcb_file)
 
-# Global states
-svgnode_warn = True
-
 for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 	# Load channel schematics and PCBs
 	ch_sch = load_json_from_file(ch_sch_file)
@@ -411,10 +408,17 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 					data[2] = str(float(data[2]) + ch_y)
 
 				elif shape_type == 'SVGNODE':
-					# svg_data = json.loads(data[1])
-					if svgnode_warn:
-						print("NOTE: PCB shape SVGNODE has been skipped (further occurrences will be suppressed)")
-					svgnode_warn = False
+					# Decode data
+					svg_data = json.loads(data[1])
+
+					# Add offset to the origin
+					svg_data['attrs']['c_origin'] = offset_x_y(svg_data['attrs']['c_origin'], ch_x, ch_y, separator=',')
+
+					# Clear child nodes
+					svg_data['childNodes'] = []
+
+					# Reencode data
+					data[1] = json.dumps(svg_data, separators=(',', ':'))
 
 				else:
 					print('ERROR: Unsupported pcb subshape %s' % shape_type)
