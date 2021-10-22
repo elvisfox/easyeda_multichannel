@@ -309,7 +309,7 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 				# Ensure sub 2 is a prefix text
 				if prefix_sub is None:
 					print('ERROR: Prefix text of PCB LIB shape is not recognized')
-					print(shape_to_str(i, subs))
+					print(shape_to_str(i_shape, subs))
 				else:
 					# Split prefix
 					base, part, subpart = split_prefix(prefix_sub[0][10])
@@ -340,7 +340,7 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 				# Ensure there are no subsubs
 				if len(sub) != 1:
 					print('ERROR: Unsupported pcb shape structure')
-					print(shape_to_str(i, subs))
+					print(shape_to_str(i_shape, subs))
 
 				# Further processing is only around sub[0]
 				data = sub[0]
