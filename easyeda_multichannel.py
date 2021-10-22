@@ -170,11 +170,6 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 	ch_sch = load_json_from_file(ch_sch_file)
 	ch_pcb = load_json_from_file(ch_pcb_file)
 
-	# TODO: checks
-	if len(ch_sch['schematics']) != 1:
-		print('ERROR: Channel schematic shall contain exactly 1 sheet')
-		exit(1)
-
 	# Dump shapes in text form (for debug purpose)
 	# dump_shapes(ch_sch['schematics'][0]['dataStr']['shape'], 'sch_shapes.txt')
 	# dump_shapes(ch_pcb['shape'], 'pcb_shapes.txt')
@@ -186,111 +181,112 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 
 		print('Processing channel %s' % i_ch)
 
-		# Create deepcopy of channel schematic sheet
-		sch = copy.deepcopy(ch_sch['schematics'][0])
+		for sch_sheet in ch_sch['schematics']:
 
-		# Prepare empty dictionary for part sch-to-pcb matching
-		part_dict = dict()
-		net_dict = dict()
+			# Create deepcopy of channel schematic sheet
+			sch = copy.deepcopy(sch_sheet)
 
-		# Generate new UUID of schematic sheet
-		sch['dataStr']['head']['uuid'] = uuid.uuid4().hex
+			# Prepare empty dictionary for part sch-to-pcb matching
+			part_dict = dict()
+			net_dict = dict()
 
-		# Append channel name to the sheet title
-		if config.channel_net_style == 1:
-			sch['title'] += '_' + str(i_ch)
-		elif config.channel_net_style == 2:
-			sch['title'] = str(i_ch) + ':' + sch['title']
-		else:
-			raise Exception('Unknown channel prefix style, please check configuration: ' + config.channel_net_style)
+			# Generate new UUID of schematic sheet
+			sch['dataStr']['head']['uuid'] = uuid.uuid4().hex
 
-		# Process shapes
-		shape_list = sch['dataStr']['shape']
+			# Append channel name to the sheet title
+			if config.channel_net_style == 1:
+				sch['title'] += '_' + str(i_ch)
+			elif config.channel_net_style == 2:
+				sch['title'] = str(i_ch) + ':' + sch['title']
+			else:
+				raise Exception('Unknown channel prefix style, please check configuration: ' + config.channel_net_style)
 
-		for i, shape in enumerate(shape_list):
-			# Split subshapes
-			subs = decode_shape(shape)
+			# Process shapes
+			shape_list = sch['dataStr']['shape']
 
-			# Process shape
-			shape_type = subs[0][0][0]
+			for i_shape, shape in enumerate(shape_list):
+				# Split subshapes
+				subs = decode_shape(shape)
 
-			# Process parts
-			if shape_type == 'LIB':
-				# Find prefix sub
-				prefix_sub = find_sub(subs, {0: 'T', 1: 'P'})
+				# Process shape
+				shape_type = subs[0][0][0]
 
-				# Ensure sub 2 is a prefix text
-				if prefix_sub is None:
-					print('ERROR: Prefix text of SCH LIB shape is not recognized')
-					print(shape_to_str(i, subs))
-					continue
+				# Process parts
+				if shape_type == 'LIB':
+					# Find prefix sub
+					prefix_sub = find_sub(subs, {0: 'T', 1: 'P'})
 
-				# Get old prefix and unique identifier
-				prefix_old = prefix_sub[0][12]
-				old_id = subs[0][0][6]
+					# Ensure sub 2 is a prefix text
+					if prefix_sub is None:
+						print('ERROR: Prefix text of SCH LIB shape is not recognized')
+						print(shape_to_str(i_shape, subs))
+						continue
 
-				# Update part, excluding sheet frame
-				if not old_id.startswith('frame_lib'):
-					# Split prefix
-					base, part, subpart = split_prefix(prefix_old)
+					# Get old prefix and unique identifier
+					prefix_old = prefix_sub[0][12]
+					old_id = subs[0][0][6]
 
-					# Append channel to the prefix
-					prefix_new = translate_channel_prefix(base, part, str(i_ch), incr_prefix)
+					# Update part, excluding sheet frame
+					if not old_id.startswith('frame_lib'):
+						# Split prefix
+						base, part, subpart = split_prefix(prefix_old)
 
-					# Replace unique identifier, store reference in the dictionary
-					new_id = 'gge' + uuid.uuid4().hex[-16:]
-					part_dict[old_id] = new_id
-					subs[0][0][6] = new_id
+						# Append channel to the prefix
+						prefix_new = translate_channel_prefix(base, part, str(i_ch), incr_prefix)
 
-					# Generate pad nets
-					for sub in subs:
-						if sub[0][0] == 'P':
-							pad_name = sub[4][4]
-							pad_net_old = '%s%s_%s' % (base, part, pad_name)
-							pad_net_new = '%s_%s' % (prefix_new, pad_name)
-							net_dict[pad_net_old.upper()] = pad_net_new.upper()
+						# Replace unique identifier, store reference in the dictionary
+						new_id = 'gge' + uuid.uuid4().hex[-16:]
+						part_dict[old_id] = new_id
+						subs[0][0][6] = new_id
 
-					# Store new prefix
-					prefix_sub[0][12] = '%s%s' % (prefix_new, subpart)
+						# Generate pad nets
+						for sub in subs:
+							if sub[0][0] == 'P':
+								pad_name = sub[4][4]
+								pad_net_old = '%s%s_%s' % (base, part, pad_name)
+								pad_net_new = '%s_%s' % (prefix_new, pad_name)
+								net_dict[pad_net_old.upper()] = pad_net_new.upper()
 
-			# Process net labels
-			elif shape_type == 'N':
-				# Get old net name, append channel to the new name
-				net_name_old = subs[0][0][5]
-				net_name_new = translate_channel_net(net_name_old, str(i_ch))
+						# Store new prefix
+						prefix_sub[0][12] = '%s%s' % (prefix_new, subpart)
 
-				# Store net
-				net_dict[net_name_old.upper()] = net_name_new.upper()
+				# Process net labels
+				elif shape_type == 'N':
+					# Get old net name, append channel to the new name
+					net_name_old = subs[0][0][5]
+					net_name_new = translate_channel_net(net_name_old, str(i_ch))
 
-				# Store new net name
-				subs[0][0][5] = net_name_new
+					# Store net
+					net_dict[net_name_old.upper()] = net_name_new.upper()
 
-			# Process net ports
-			elif shape_type == 'F' and subs[0][0][1] == 'part_netLabel_netPort':
-				# Get old net name, append channel to the new name
-				net_name_old = subs[0][2][0]
-				net_name_new = translate_channel_net(net_name_old, str(i_ch))
+					# Store new net name
+					subs[0][0][5] = net_name_new
 
-				# Store net
-				net_dict[net_name_old.upper()] = net_name_new.upper()
+				# Process net ports
+				elif shape_type == 'F' and subs[0][0][1] == 'part_netLabel_netPort':
+					# Get old net name, append channel to the new name
+					net_name_old = subs[0][2][0]
+					net_name_new = translate_channel_net(net_name_old, str(i_ch))
 
-				# Store new net name
-				subs[0][2][0] = net_name_new
+					# Store net
+					net_dict[net_name_old.upper()] = net_name_new.upper()
 
-			# All power and ground netlabels are treated as global nets
-			elif shape_type == 'F':
-				net_name = subs[0][2][0]
-				net_dict[net_name.upper()] = net_name.upper()
+					# Store new net name
+					subs[0][2][0] = net_name_new
 
-			# Reassemble shape
-			shape_list[i] = encode_shape(subs)
+				# All power and ground netlabels are treated as global nets
+				elif shape_type == 'F':
+					net_name = subs[0][2][0]
+					net_dict[net_name.upper()] = net_name.upper()
 
-		# Add processed schematic sheet to the main project
-		main_sch['schematics'].append(sch)
+				# Reassemble shape
+				shape_list[i_shape] = encode_shape(subs)
+
+			# Add processed schematic sheet to the main project
+			main_sch['schematics'].append(sch)
 
 		print('Schematic components: %d' % len(part_dict))
 		print('Schematic nets: %d' % len(net_dict))
-		# print(json.dumps(net_dict, indent=4))
 
 		####################################################
 		####				PROCESSING PCB				####
@@ -299,7 +295,7 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 		shape_list = ch_pcb['shape']
 
 		# Process shapes
-		for i, shape in enumerate(shape_list):
+		for i_shape, shape in enumerate(shape_list):
 			# Split subshapes
 			subs = decode_shape(shape)
 
@@ -330,10 +326,11 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 					prefix_sub[0][11] = ''
 
 				# Replace unique identifier
-				old_id = subs[0][0][6]
-				if old_id in part_dict.keys():
-					subs[0][0][6] = part_dict[old_id]
-					del part_dict[old_id]
+				shape_gid = subs[0][0][6]
+				if shape_gid in part_dict.keys():
+					subs[0][0][6] = part_dict[shape_gid]
+					del part_dict[shape_gid]
+					shape_gid = subs[0][0][6]			# this gId is used later when processing subshapes
 				else:
 					print('WARNING: PCB component %s (id: %s) is not matched with any schematic component' % \
 						(prefix_sub[0][10], old_id))
@@ -363,6 +360,18 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 							data[3] = net_dict[net_name]
 						except KeyError:
 							print('WARNING: PCB net %s is not matched with any schematic net' % net_name)
+
+					# For copper area, parse and translate coordinates
+					if len(data) >= 11:
+						# Parse data
+						copper_data = json.loads(data[10])
+
+						# Translate coordinates
+						for i_line, line_data in enumerate(copper_data[0]):
+							copper_data[0][i_line] = offset_x_y(line_data, ch_x, ch_y)
+
+						# Reencode data
+						data[10] = json.dumps(copper_data, separators=(',', ':'))
 
 				elif shape_type == 'SOLIDREGION':
 					data[3] = offset_x_y(data[3], ch_x, ch_y)
@@ -411,11 +420,23 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 					# Decode data
 					svg_data = json.loads(data[1])
 
+					# Replace gid
+					svg_id					= '%s_outline' % shape_gid
+					svg_data['gId']			= svg_id
+					svg_data['attrs']['id']	= svg_id
+
 					# Add offset to the origin
 					svg_data['attrs']['c_origin'] = offset_x_y(svg_data['attrs']['c_origin'], ch_x, ch_y, separator=',')
 
-					# Clear child nodes
-					svg_data['childNodes'] = []
+					# Process child nodes
+					for i_child, child_data in enumerate(svg_data['childNodes']):
+						# Replace gid
+						child_id					= '%s_line%d' % (svg_id, i_child)
+						child_data['gId']			= child_id
+						child_data['attrs']['id']	= child_id
+
+						# Translate coordinates
+						child_data['attrs']['points'] = offset_x_y(child_data['attrs']['points'], ch_x, ch_y)
 
 					# Reencode data
 					data[1] = json.dumps(svg_data, separators=(',', ':'))
