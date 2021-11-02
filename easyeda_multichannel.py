@@ -151,6 +151,27 @@ def translate_channel_prefix(base, part, ch_id, incr_prefix):
 	else:
 		return translate_channel_net('%s%s' % (base, part), ch_id)
 
+def translate_pcb_gid(gid, ch_id, is_component):
+	assert gid[:3] == 'gge'
+	return '%s_%s' % (gid, ch_id)
+
+def translate_pcb_net(net_name, net_dict):
+	# Skip if no net
+	if len(net_name) == 0:
+		return net_name
+
+	# Capitalize PCB net name as EasyEDA does it
+	net_name = net_name.upper()
+
+	# Check whether net is in dictionary, created during schematic translation
+	if net_name in net_dict.keys():
+		# Yes, return net name from the dict
+		return net_dict[net_name]
+	else:
+		# No, return the original name
+		print('WARNING: PCB net %s is not matched with any schematic net' % net_name)
+		return net_name
+
 ####################################################
 ####				MAIN ROUTINE				####
 ####################################################
@@ -300,9 +321,9 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 			subs = decode_shape(shape)
 
 			# Update parts
-			shape_type = subs[0][0][0]
+			is_component = subs[0][0][0] == 'LIB'
 
-			if shape_type == 'LIB':
+			if is_component:
 				# Find prefix sub
 				prefix_sub = find_sub(subs, {0: 'TEXT', 1: 'P'})
 
@@ -350,16 +371,23 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 					data[1] = str(float(data[1]) + ch_x)
 					data[2] = str(float(data[2]) + ch_y)
 
-				elif shape_type == 'COPPERAREA' or shape_type == 'TRACK':
+				elif shape_type == 'TRACK':
 					data[4] = offset_x_y(data[4], ch_x, ch_y)
 
 					# update net data[3]
-					net_name = data[3].upper()
-					if net_name:
-						try:
-							data[3] = net_dict[net_name]
-						except KeyError:
-							print('WARNING: PCB net %s is not matched with any schematic net' % net_name)
+					data[3] = translate_pcb_net(data[3], net_dict)
+
+					# Update gid
+					data[5] = translate_pcb_gid(data[5], str(i_ch), is_component)
+
+				elif shape_type == 'COPPERAREA':
+					data[4] = offset_x_y(data[4], ch_x, ch_y)
+
+					# update net data[3]
+					data[3] = translate_pcb_net(data[3], net_dict)
+
+					# Update gid
+					data[7] = translate_pcb_gid(data[7], str(i_ch), is_component)
 
 					# For copper area, parse and translate coordinates
 					if len(data) >= 11:
@@ -376,8 +404,14 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 				elif shape_type == 'SOLIDREGION':
 					data[3] = offset_x_y(data[3], ch_x, ch_y)
 
+					# Update gid
+					data[5] = translate_pcb_gid(data[5], str(i_ch), is_component)
+
 				elif shape_type == 'ARC':
 					data[4] = offset_x_y(data[4], ch_x, ch_y)
+
+					# Update gid
+					data[6] = translate_pcb_gid(data[6], str(i_ch), is_component)
 
 				elif shape_type == 'TEXT':
 					data[2] = str(float(data[2]) + ch_x)
@@ -385,17 +419,18 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 
 					data[11] = offset_x_y(data[11], ch_x, ch_y)
 
+					# Update gid
+					data[13] = translate_pcb_gid(data[13], str(i_ch), is_component)
+
 				elif shape_type == 'VIA':
 					data[1] = str(float(data[1]) + ch_x)
 					data[2] = str(float(data[2]) + ch_y)
 
+					# Update gid
+					data[6] = translate_pcb_gid(data[6], str(i_ch), is_component)
+
 					# update net data[4]
-					net_name = data[4].upper()
-					if net_name:
-						try:
-							data[4] = net_dict[net_name]
-						except KeyError:
-							print('WARNING: PCB net %s is not matched with any schematic net' % net_name)
+					data[4] = translate_pcb_net(data[4], net_dict)
 
 				elif shape_type == 'PAD':
 					data[2] = str(float(data[2]) + ch_x)
@@ -404,17 +439,25 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 					data[10] = offset_x_y(data[10], ch_x, ch_y)
 					data[19] = offset_x_y(data[19], ch_x, ch_y, separator=',')
 
-					# update net data[7]
-					net_name = data[7].upper()
-					if net_name:
-						try:
-							data[7] = net_dict[net_name]
-						except KeyError:
-							print('WARNING: PCB net %s is not matched with any schematic net' % net_name)
+					# Update gid
+					data[12] = translate_pcb_gid(data[12], str(i_ch), is_component)
 
-				elif shape_type == 'CIRCLE' or shape_type == 'HOLE':
+					# update net data[7]
+					data[7] = translate_pcb_net(data[7], net_dict)
+
+				elif shape_type == 'CIRCLE':
 					data[1] = str(float(data[1]) + ch_x)
 					data[2] = str(float(data[2]) + ch_y)
+
+					# Update gid
+					data[6] = translate_pcb_gid(data[6], str(i_ch), is_component)
+
+				elif shape_type == 'HOLE':
+					data[1] = str(float(data[1]) + ch_x)
+					data[2] = str(float(data[2]) + ch_y)
+
+					# Update gid
+					data[4] = translate_pcb_gid(data[4], str(i_ch), is_component)
 
 				elif shape_type == 'SVGNODE':
 					# Decode data
