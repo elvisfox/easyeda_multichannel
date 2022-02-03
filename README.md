@@ -1,10 +1,10 @@
 # easyeda_multichannel
 Python script allowing multi-channel design in EasyEDA.
 Script is already capable of generating multi-channel PCB matched with the schematic.
-Tested with EasyEDA up to 6.4.25.
+Tested with EasyEDA up to 6.4.31.
 
 ## Installation
-Python 3.6 (or compatible version) is required. No additional modules are used.
+Python 3.6 (or higher) is required. No additional modules are used.
 
 ## How to use
 1. Split your design into 2 separate projects:
