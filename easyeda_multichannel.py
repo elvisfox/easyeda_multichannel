@@ -2,6 +2,7 @@ import json
 import copy
 import uuid
 import re
+from datetime import datetime
 
 import config
 
@@ -172,6 +173,12 @@ def translate_pcb_net(net_name, net_dict):
 		print('WARNING: PCB net %s is not matched with any schematic net' % net_name)
 		return net_name
 
+def get_pcb_origin(pcb):
+	canvas = decode_shape(pcb['canvas'])[0][0]
+	origin_x = float(canvas[16])
+	origin_y = float(canvas[17])
+	return origin_x, origin_y
+
 ####################################################
 ####				MAIN ROUTINE				####
 ####################################################
@@ -179,12 +186,17 @@ def translate_pcb_net(net_name, net_dict):
 # Load main schematics (if specified) or create empty
 if config.main_sch_file is None:
 	main_sch = dict()
-	main_sch['schematics'] = list()
+	main_sch['docType']			= 5
+	main_sch['title']			= f'easyeda_multichannel_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+	main_sch['schematics']		= list()
 else:
 	main_sch = load_json_from_file(config.main_sch_file)
 
 # Load main PCB
 main_pcb = load_json_from_file(config.main_pcb_file)
+
+# Decode main PCB origin
+main_origin_x, main_origin_y = get_pcb_origin(main_pcb)
 
 for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 	# Load channel schematics and PCBs
@@ -195,7 +207,15 @@ for ch_sch_file, ch_pcb_file, channels in config.channel_sources:
 	# dump_shapes(ch_sch['schematics'][0]['dataStr']['shape'], 'sch_shapes.txt')
 	# dump_shapes(ch_pcb['shape'], 'pcb_shapes.txt')
 
+	# Decode PCB origin of the channel source
+	ch_origin_x, ch_origin_y = get_pcb_origin(ch_pcb)
+
+	# Iterate over channels
 	for i_ch, (ch_x, ch_y, incr_prefix) in channels.items():
+		# Apply origin delta to ch_x, ch_y
+		ch_x += main_origin_x - ch_origin_x
+		ch_y += main_origin_y - ch_origin_y
+
 		####################################################
 		####			PROCESSING SCHEMATIC			####
 		####################################################
